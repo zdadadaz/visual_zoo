@@ -109,6 +109,7 @@ class UNet3D(nn.Module):
             )
         )
 
+# +
 class UNet3D_ef(nn.Module):
     # acdc 3x32x112x112
     def __init__(self, in_channels=3, out_channels=1, init_features=30, pretrain = None):
@@ -159,10 +160,17 @@ class UNet3D_ef(nn.Module):
             nn.LeakyReLU(negative_slope=0.01, inplace=True)
             )
         
-        self.fc = nn.Sequential(nn.Linear(480*2*7*7, 60*2*7*7),
-                                 nn.ReLU(),
-                                 nn.Linear(60*2*7*7, 1)
-                                ) 
+#         self.fc = nn.Sequential(nn.Linear(480*2*7*7, 60*2*7*7),
+#                                  nn.ReLU(),
+#                                  nn.Linear(60*2*7*7, 1)
+#                                 ) 
+        # FC2
+        self.fc = nn.Sequential(
+                                nn.AdaptiveAvgPool3d((None, 1, 1)),
+                                nn.AdaptiveMaxPool3d(1),
+            nn.Conv3d(480, 1, kernel_size=1, stride=1, padding=0)
+        ) 
+        
         # index of conv
         self.conv_layer_indices = [0, 3, 7, 10, 14, 17, 21, 24, 28, 31]
         # feature maps
@@ -182,29 +190,36 @@ class UNet3D_ef(nn.Module):
                 # self.pool_locs[idx] = location
             else:
                 x = layer(x)
-        x = x.view(x.size(0),-1)
+#         x = x.view(x.size(0),-1)
         output = self.fc(x)
         return output
     
     def ini_weights(self):
-        checkpoint = torch.load("/home/zdadadaz/Desktop/course/medical/code/echodyn/output/video/echonet_ef/best.pt")
+        checkpoint = torch.load("/home/jovyan/code/echodyn_m/output/video/unet3d_ef_FC2_32_2_random/best.pt")
+#         checkpoint = torch.load("/home/zdadadaz/Desktop/course/medical/code/echodyn/output/video/echonet_ef/best.pt")
         # model.load_state_dict(checkpoint['state_dict'])
         # Print model's state_dict
         # print("Model's state_dict:")
         count = 0
         for idx, layer in enumerate(checkpoint['state_dict']):
-            # print(idx, layer, checkpoint['state_dict'][layer].size())
+#             print(idx, layer, checkpoint['state_dict'][layer].size())
             if idx<10:
                 self.features[self.conv_layer_indices[count]].weight.data = checkpoint['state_dict'][layer]
                 count += 1
             elif idx == 10:
-                self.fc[0].weight.data = checkpoint['state_dict'][layer]
-            elif idx == 11:
-                self.fc[0].bias.data = checkpoint['state_dict'][layer]
-            elif idx == 12:
                 self.fc[2].weight.data = checkpoint['state_dict'][layer]
-            elif idx == 13:
+            elif idx == 11:
                 self.fc[2].bias.data = checkpoint['state_dict'][layer]
-        
+            
+#             elif idx == 10:
+#                 self.fc[0].weight.data = checkpoint['state_dict'][layer]
+#             elif idx == 11:
+#                 self.fc[0].bias.data = checkpoint['state_dict'][layer]
+#             elif idx == 12:
+#                 self.fc[2].weight.data = checkpoint['state_dict'][layer]
+#             elif idx == 13:
+#                 self.fc[2].bias.data = checkpoint['state_dict'][layer]
+# -
+
 # model = UNet3D_ef(3, 1)
 # print(model)

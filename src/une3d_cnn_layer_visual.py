@@ -146,4 +146,4 @@ if __name__ == '__main__':
         # # Layer visualization with pytorch hooks
         # layer_vis.visualise_layer_with_hooks()
         layer_vis.visualise_layer_without_hooks()
-    
+

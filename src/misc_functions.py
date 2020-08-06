@@ -9,6 +9,7 @@ import numpy as np
 from PIL import Image, ImageFilter
 import matplotlib.cm as mpl_color_map
 import cv2
+from unet3d import UNet3D_ef
 
 import torch
 from torch.autograd import Variable
@@ -98,6 +99,29 @@ def save_class_activation_images(org_img, activation_map, file_name):
     save_image(activation_map, path_to_file)
 
 
+def save_class_activation_videos(org_video, activation_map_video, file_name):
+    """
+        Saves cam activation map and activation map on the original image
+
+    Args:
+        org_img (PIL img): Original image
+        activation_map (numpy arr): Activation map (grayscale) 0-255
+        file_name (str): File name of the exported image
+    """
+    if not os.path.exists('../results'):
+        os.makedirs('../results')
+    for v in range(org_video.shape[0]):
+        org_img = org_video[v,...]
+#         org_img = convert_to_grayscale(org_video[v,...])
+        print("org_video",org_video.shape,"org_img",org_img.shape)
+        activation_map = activation_map_video[v,...]
+        # Grayscale activation map
+        heatmap, heatmap_on_image = apply_colormap_on_image(org_img, activation_map, 'hsv')
+        # Save heatmap on iamge
+        path_to_file = os.path.join('../results', file_name+'_Cam_On_Image_' +str(v) +'.png')
+        save_image(heatmap_on_image, path_to_file)
+
+
 def apply_colormap_on_image(org_im, activation, colormap_name):
     """
         Apply heatmap on image
@@ -115,6 +139,7 @@ def apply_colormap_on_image(org_im, activation, colormap_name):
     heatmap = Image.fromarray((heatmap*255).astype(np.uint8))
     no_trans_heatmap = Image.fromarray((no_trans_heatmap*255).astype(np.uint8))
 
+    print('org_im.shape',org_im.shape)
     # Apply heatmap on iamge
     heatmap_on_image = Image.new("RGBA", org_im.size)
     heatmap_on_image = Image.alpha_composite(heatmap_on_image, org_im.convert('RGBA'))
@@ -204,6 +229,23 @@ def preprocess_image(pil_im, resize_im=True):
     return im_as_var
 
 
+def preprocess_video(pil_video,device):
+#     print('pil_video.shape',pil_video.shape)
+    frame_num = pil_video.shape[0]
+    tmp = torch.from_numpy(np.random.uniform(150, 180, (1,3,32,112,112))).float()
+    for i in range(frame_num):
+        if pil_video is not None:
+            random_image = pil_video[i,...]
+        else:
+            random_image = np.uint8(np.random.uniform(150, 180, (112, 112, 3)))
+        # Process image and return variable
+        processed_image = preprocess_image(random_image, False)
+        tmp[0,:,i,...] = processed_image[0,...]
+    processed_image=Variable(tmp, requires_grad=True).to(device)
+    
+    return processed_image
+
+
 def recreate_image(im_as_var):
     """
         Recreates images from a torch variable, sort of reverse preprocessing
@@ -269,6 +311,30 @@ def get_example_params(example_index):
     pretrained_model = models.alexnet(pretrained=True)
     return (original_image,
             prep_img,
+            target_class,
+            file_name_to_export,
+            pretrained_model)
+
+
+def get_vide_example_params(example_index,device):
+    # Pick one of the examples
+    example_list = (('/home/jovyan/data/EchoNet-Dynamic/Videos/0X1002E8FBACD08477.avi', 59.10198811),
+                    ('../input_images/cat_dog.png', 243),
+                    ('../input_images/spider.png', 72))
+    img_path = example_list[example_index][0]
+    target_class = example_list[example_index][1]
+    file_name_to_export = img_path[img_path.rfind('/')+1:img_path.rfind('.')]
+    # Read video
+    org_video = loadvideo(img_path)
+    org_video = org_video[:2:-1,...] # period =2
+    org_video = org_video[15:(32+15),...] # get 32 frames
+    # Process video
+    prep_video = preprocess_video(org_video, device)
+    # Define model
+    pretrained_model = UNet3D_ef()
+    pretrained_model.to(device)
+    return (org_video,
+            prep_video,
             target_class,
             file_name_to_export,
             pretrained_model)
