@@ -39,6 +39,16 @@ def loadvideo(filename):
 
     return v
 
+def savevideo(filename, array, fps=1):
+    array = array.transpose((3, 0, 1, 2))
+    c, f, height, width = array.shape
+    fourcc = cv2.VideoWriter_fourcc('M', 'J', 'P', 'G')
+    out = cv2.VideoWriter(filename, fourcc, fps, (width, height))
+
+    for i in range(f):
+        out.write(array[:, i, :, :].transpose((1, 2, 0)))
+
+
 def convert_to_grayscale(im_as_arr):
     """
         Converts 3d image to grayscale
@@ -99,7 +109,7 @@ def save_class_activation_images(org_img, activation_map, file_name):
     save_image(activation_map, path_to_file)
 
 
-def save_class_activation_videos(org_video, activation_map_video, file_name):
+def save_class_activation_videos(org_video, activation_map_video, file_name, layer):
     """
         Saves cam activation map and activation map on the original image
 
@@ -110,18 +120,25 @@ def save_class_activation_videos(org_video, activation_map_video, file_name):
     """
     if not os.path.exists('../results'):
         os.makedirs('../results')
+    video_out = np.zeros_like(org_video)
     for v in range(org_video.shape[0]):
         org_img = org_video[v,...]
-#         org_img = convert_to_grayscale(org_video[v,...])
-        print("org_video",org_video.shape,"org_img",org_img.shape)
+        org_img = Image.fromarray(np.uint8(org_img))
+        org_img.save('../results/org.png')
         activation_map = activation_map_video[v,...]
+        
         # Grayscale activation map
         heatmap, heatmap_on_image = apply_colormap_on_image(org_img, activation_map, 'hsv')
+#         print('heatmap_on_image',np.array(heatmap_on_image).shape)
+        video_out[v,...] = cv2.cvtColor(np.array(heatmap_on_image), cv2.COLOR_RGBA2BGR)
         # Save heatmap on iamge
         path_to_file = os.path.join('../results', file_name+'_Cam_On_Image_' +str(v) +'.png')
-        save_image(heatmap_on_image, path_to_file)
+#         save_image(heatmap_on_image, path_to_file)
+        
+    savevideo(os.path.join('../results', file_name+'_Cam_On_Image_layer_'+str(layer)+'.avi'), video_out.astype(np.uint8), 50)
 
 
+# +
 def apply_colormap_on_image(org_im, activation, colormap_name):
     """
         Apply heatmap on image
@@ -139,13 +156,15 @@ def apply_colormap_on_image(org_im, activation, colormap_name):
     heatmap = Image.fromarray((heatmap*255).astype(np.uint8))
     no_trans_heatmap = Image.fromarray((no_trans_heatmap*255).astype(np.uint8))
 
-    print('org_im.shape',org_im.shape)
+#     print('org_im.shape',org_im.size)
     # Apply heatmap on iamge
     heatmap_on_image = Image.new("RGBA", org_im.size)
     heatmap_on_image = Image.alpha_composite(heatmap_on_image, org_im.convert('RGBA'))
     heatmap_on_image = Image.alpha_composite(heatmap_on_image, heatmap)
     return no_trans_heatmap, heatmap_on_image
 
+
+# -
 
 def format_np_output(np_arr):
     """
@@ -235,7 +254,7 @@ def preprocess_video(pil_video,device):
     tmp = torch.from_numpy(np.random.uniform(150, 180, (1,3,32,112,112))).float()
     for i in range(frame_num):
         if pil_video is not None:
-            random_image = pil_video[i,...]
+            random_image = pil_video[i,...].copy()
         else:
             random_image = np.uint8(np.random.uniform(150, 180, (112, 112, 3)))
         # Process image and return variable
@@ -316,6 +335,7 @@ def get_example_params(example_index):
             pretrained_model)
 
 
+# +
 def get_vide_example_params(example_index,device):
     # Pick one of the examples
     example_list = (('/home/jovyan/data/EchoNet-Dynamic/Videos/0X1002E8FBACD08477.avi', 59.10198811),
@@ -328,8 +348,13 @@ def get_vide_example_params(example_index,device):
     org_video = loadvideo(img_path)
     org_video = org_video[:2:-1,...] # period =2
     org_video = org_video[15:(32+15),...] # get 32 frames
+    
     # Process video
     prep_video = preprocess_video(org_video, device)
+    
+#     org_img = Image.fromarray(np.uint8(org_video[0,...]))
+#     org_img.save('../results/org_img.png')
+    
     # Define model
     pretrained_model = UNet3D_ef()
     pretrained_model.to(device)

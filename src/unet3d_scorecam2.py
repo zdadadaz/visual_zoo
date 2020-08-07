@@ -117,19 +117,22 @@ class ScoreCam():
             out2[f,...] = cv2.resize(tmp, (size_out[1],size_out[2]))/255.
 #             out2[f,...] = np.uint8(Image.fromarray(tmp).resize((size_out[1],size_out[2]), Image.ANTIALIAS))/255
         return out2
-        
 
 
 if __name__ == '__main__':
     # Get params
     target_example = 0  # 
+    target_layer = 31
     device = torch.device("cpu")
     (original_video, prep_video, target_class, file_name_to_export, pretrained_model) =\
         get_vide_example_params(target_example,device)
-    # Score cam
-    score_cam = ScoreCam(pretrained_model, target_layer=31)
-    # Generate cam mask
-    cam = score_cam.generate_cam(prep_video, target_class)
-#     # Save mask
-    save_class_activation_videos(original_video, cam, file_name_to_export)
-    print('Score cam completed')
+    for target_layer in [0, 3, 7, 10, 14, 17, 21, 24, 28, 31]:
+        # Score cam
+        print('get_vide_example_params',get_vide_example_params)
+        score_cam = ScoreCam(pretrained_model, target_layer=target_layer)
+        # Generate cam mask
+        cam = score_cam.generate_cam(prep_video, target_class)
+
+        # Save mask
+        save_class_activation_videos(original_video, cam, file_name_to_export, target_layer)
+        print('Score cam completed')
